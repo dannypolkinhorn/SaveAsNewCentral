@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RevitAddIns>
+  <AddIn Type="Command">
+    <Text>Save As New Central</Text>
+    <Description>Saves a series of Revit Central files to a new location on the network</Description>
+    <Assembly>C:\Users\polkind\Documents\Visual Studio 2013\Projects\SaveAsNewCentral\SaveAsNewCentral\bin\Release\SaveAsNewCentral.dll</Assembly>
+    <FullClassName>SaveAsNewCentral.Commands</FullClassName>
+    <VendorId>Autodesk, Inc.</VendorId>
+    <ClientId>110601e3-3f4b-42fd-b736-90428f13d21b</ClientId>
+  </AddIn>
+  <AddIn Type="Application">
+    <Name>Save As New Central</Name>
+    <Assembly>C:\Users\polkind\Documents\Visual Studio 2013\Projects\SaveAsNewCentral\SaveAsNewCentral\bin\Release\SaveAsNewCentral.dll</Assembly>
+    <ClientId>f7aa2a5c-8f42-449c-8e57-725242fd5c4f</ClientId>
+    <VendorId>Autodesk, Inc.</VendorId>
+    <FullClassName>SaveAsNewCentral.UI</FullClassName>
+  </AddIn>
+</RevitAddIns>
