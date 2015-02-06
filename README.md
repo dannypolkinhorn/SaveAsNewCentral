@@ -33,7 +33,7 @@ Create an Excel file (using the included template if you like) that lists the fu
 
 ### Open Source
 
-Obviously, this is open source.  Please help out and contribute by submitting Issues, or by forking and submitting a pull request.
+Obviously, this is open source.  Please help out and contribute by submitting [Issues](https://github.com/dannypolkinhorn/SaveAsNewCentral/issues), or by forking and submitting a pull request.
 
 ### Disclaimer
 
