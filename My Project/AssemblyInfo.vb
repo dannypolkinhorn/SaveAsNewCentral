@@ -9,10 +9,10 @@ Imports System.Runtime.InteropServices
 ' Review the values of the assembly attributes
 
 <Assembly: AssemblyTitle("SaveAsNewCentral")> 
-<Assembly: AssemblyDescription("")> 
-<Assembly: AssemblyCompany("")> 
+<Assembly: AssemblyDescription("Saves Revit Central files in a new location.")> 
+<Assembly: AssemblyCompany("Autodesk")> 
 <Assembly: AssemblyProduct("SaveAsNewCentral")> 
-<Assembly: AssemblyCopyright("Copyright ©  2014")> 
+<Assembly: AssemblyCopyright("Copyright ©2014 Autodesk, All Rights Reserved")> 
 <Assembly: AssemblyTrademark("")> 
 
 <Assembly: ComVisible(False)>

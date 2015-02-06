@@ -120,4 +120,8 @@
   <metadata name="OpenFileDialog.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
     <value>17, 17</value>
   </metadata>
+  <data name="lblOption1.Text" xml:space="preserve">
+    <value>Saves the Central file listed in the Source column to the destination listed in the Destination column.  This does not affect the original Central file at all, nor overwrite files in the new location.  Does NOT copy linked files to the new location.
+</value>
+  </data>
 </root>

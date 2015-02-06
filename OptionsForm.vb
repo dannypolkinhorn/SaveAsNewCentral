@@ -3,21 +3,24 @@ Imports xl = Microsoft.Office.Interop.Excel
 
 
 
-Public Class ExcelForm
+Public Class OptionsForm
 
-    Public Property FileName As String
+    Public Property ExcelFileName As String
     Public Property SheetName As String
     Public Property SourceColumn As String
     Public Property DestinationColumn As String
+    Public Property IsSavingToNewLocation As Boolean = True
+    Public Property Suffix As String
+
 
     Private Sub BrowseButton_Click(sender As Object, e As EventArgs) Handles BrowseButton.Click
         OpenFileDialog.ShowDialog()
     End Sub
 
     Private Sub OpenFileDialog_FileOk(sender As Object, e As ComponentModel.CancelEventArgs) Handles OpenFileDialog.FileOk
-        ExcelFileName.Text = OpenFileDialog.FileName
-        FileName = OpenFileDialog.FileName
-
+        txtExcelFileName.Text = OpenFileDialog.FileName
+        ExcelFileName = OpenFileDialog.FileName
+        ToggleControls(File.Exists(ExcelFileName))
         Dim objExcel As xl._Application = CreateObject("Excel.Application")
         Dim wb As xl.Workbook = objExcel.Workbooks.Open(OpenFileDialog.FileName)
         Dim shNames As List(Of String) = New List(Of String)
@@ -26,16 +29,15 @@ Public Class ExcelForm
         Next
         wb.Close()
         Sheets.DataSource = shNames
-        Sheets.SelectedIndex = 0
+        Sheets.SelectedText = shNames(0)
         SheetName = shNames(0)
         SourceColumn = "A"
         DestinationColumn = "B"
-        StartButton.Enabled = True
-
+        Sheets.Refresh()
     End Sub
 
-    Private Sub ExcelFileName_TextChanged(sender As Object, e As EventArgs) Handles ExcelFileName.TextChanged
-        If File.Exists(ExcelFileName.Text) Then
+    Private Sub ExcelFileName_TextChanged(sender As Object, e As EventArgs) Handles txtExcelFileName.TextChanged
+        If File.Exists(txtExcelFileName.Text) Then
             ToggleControls(True)
         Else
             ToggleControls(False)
@@ -49,7 +51,15 @@ Public Class ExcelForm
         Sheets.Enabled = Enabled
         SourceCol.Enabled = Enabled
         DestinationCol.Enabled = Enabled
-        StartButton.Enabled = Enabled
+        btnStart.Enabled = Enabled
+        If Enabled Then
+            Me.AcceptButton = btnStart
+            btnStart.DialogResult = Windows.Forms.DialogResult.OK
+        Else
+            Me.AcceptButton = Nothing
+            btnStart.DialogResult = Nothing
+        End If
+
     End Sub
 
     Private Sub StartButton_Click(sender As Object, e As EventArgs)
@@ -83,4 +93,33 @@ Public Class ExcelForm
     Private Sub SourceCol_SelectedValueChanged(sender As Object, e As EventArgs) Handles SourceCol.SelectedValueChanged
         SourceColumn = SourceCol.SelectedText
     End Sub
+
+    Private Sub optOverwriteExisting_CheckedChanged(sender As Object, e As EventArgs) Handles optOverwriteExisting.CheckedChanged
+
+        lblSuffix.Enabled = optOverwriteExisting.Checked
+        txtSuffix.Enabled = optOverwriteExisting.Checked
+        If File.Exists(txtExcelFileName.Text) Then
+            LabelDestination.Enabled = Not optOverwriteExisting.Checked
+            DestinationCol.Enabled = Not optOverwriteExisting.Checked
+        End If
+
+        '' Don't allow changing paths because it requires the file to be saved as a new name?
+        'chkAbsToRel.Checked = Not optOverwriteExisting.Checked
+        'chkAbsToRel.Enabled = Not optOverwriteExisting.Checked
+    End Sub
+
+    Private Sub txtSuffix_TextChanged(sender As Object, e As EventArgs) Handles txtSuffix.TextChanged
+        If txtSuffix.Text = "_backup" Then
+            MsgBox("Cannot use '_backup' because it conflicts with the existing backup folder name.", MsgBoxStyle.Information + vbOKOnly)
+            btnStart.Enabled = False
+        Else
+            btnStart.Enabled = True
+            Me.Suffix = txtSuffix.Text
+        End If
+    End Sub
+
+    Private Sub optSaveToNewLocation_CheckedChanged(sender As Object, e As EventArgs) Handles optSaveToNewLocation.CheckedChanged
+        IsSavingToNewLocation = optSaveToNewLocation.Checked
+    End Sub
+
 End Class

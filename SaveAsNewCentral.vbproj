@@ -75,10 +75,10 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Commands.vb" />
-    <Compile Include="ExcelForm.Designer.vb">
-      <DependentUpon>ExcelForm.vb</DependentUpon>
+    <Compile Include="OptionsForm.Designer.vb">
+      <DependentUpon>OptionsForm.vb</DependentUpon>
     </Compile>
-    <Compile Include="ExcelForm.vb">
+    <Compile Include="OptionsForm.vb">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="My Project\AssemblyInfo.vb" />
@@ -98,8 +98,8 @@
     </Compile>
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="ExcelForm.resx">
-      <DependentUpon>ExcelForm.vb</DependentUpon>
+    <EmbeddedResource Include="OptionsForm.resx">
+      <DependentUpon>OptionsForm.vb</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="My Project\Resources.resx">
       <Generator>VbMyResourcesResXFileCodeGenerator</Generator>

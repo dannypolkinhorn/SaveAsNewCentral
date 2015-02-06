@@ -24,31 +24,47 @@ Public Class Commands
     'Open the files, and save them as new central files
 
     Public Function Execute(commandData As ExternalCommandData, ByRef message As String, elements As DB.ElementSet) As Result Implements IExternalCommand.Execute
-        Dim log As String = ""
         Dim count As Integer = 0
         Dim success As Integer = 0
         Dim wb As xl.Workbook = Nothing
+        Dim files As List(Of RvtFile) = New List(Of RvtFile)
+
+        'Clear the log
+        Try
+            If File.Exists(Path.GetTempPath & "SaveAsNewCentral.log") Then
+                File.Delete(Path.GetTempPath & "SaveAsNewCentral.log")
+            End If
+        Catch ex As Exception
+            'Swallow it
+        End Try
+
 
         Try
 
             Dim app As Application = commandData.Application.Application
-            Dim source As String = String.Empty
-            Dim dest As String = String.Empty
 
-            log = "Getting Excel data"
+            LogThis("Starting Save As New Central")
+            LogThis("Getting options and Excel data")
 
-            Dim xlForm As ExcelForm = New ExcelForm
-            If xlForm.ShowDialog() <> Windows.Forms.DialogResult.OK Then
+            Dim options As OptionsForm = New OptionsForm
+            If options.ShowDialog() <> Windows.Forms.DialogResult.OK Then
                 Return Result.Cancelled
             End If
 
+            LogThis("Options:" & vbCrLf & "  Excel File: " & options.ExcelFileName & vbCrLf & _
+                    "  Sheet Name: " & options.SheetName & vbCrLf & _
+                    "  Source Column: " & options.SourceColumn & vbCrLf & _
+                    "  Destination Column: " & options.DestinationColumn & vbCrLf & _
+                    "  Save to New Location: " & options.IsSavingToNewLocation.ToString & vbCrLf)
+
+            LogThis("Opening Excel...")
             Dim objExcel As xl._Application = CreateObject("Excel.Application")
             'MsgBox(xlForm.FileName)
-            wb = objExcel.Workbooks.Open(xlForm.FileName)
+            wb = objExcel.Workbooks.Open(options.ExcelFileName)
             Dim sheet As xl.Worksheet = Nothing
             ' MsgBox(xlForm.SheetName)
             For Each sh In wb.Sheets
-                If sh.Name = xlForm.SheetName Then
+                If sh.Name = options.SheetName Then
                     sheet = sh
                     Exit For
                 End If
@@ -59,102 +75,137 @@ Public Class Commands
                 Return Result.Failed
             End If
 
+            LogThis("Getting file names from Excel...")
             Dim row As Integer = 2
             Dim emptyCellFound As Boolean = False
-            log += vbCrLf & "Starting to save files in their new locations"
             Do Until emptyCellFound
-
                 Try
                     'Get the source and destination filenames
-                    Dim rng As xl.Range = TryCast(sheet.Cells(row, xlForm.SourceColumn), xl.Range)
+                    Dim source As String = String.Empty
+                    Dim dest As String = String.Empty
+                    Dim rng As xl.Range = TryCast(sheet.Cells(row, options.SourceColumn), xl.Range)
                     source = rng.Value2
-                    rng = TryCast(sheet.Cells(row, xlForm.DestinationColumn), xl.Range)
+                    rng = TryCast(sheet.Cells(row, options.DestinationColumn), xl.Range)
                     dest = rng.Value2
-                    If source = String.Empty Or dest = String.Empty Then
+                    If source = String.Empty Then
                         emptyCellFound = True
                         Exit Do
                     End If
+                    files.Add(New RvtFile(source, dest, options.Suffix))
                     row += 1
                 Catch ex As Exception
-                    log += vbCrLf & "Error getting the source and destination file names from the Excel file"
-                    log += vbCrLf & "Workbook name: " & xlForm.FileName
-                    log += vbCrLf & "Sheet name: " & xlForm.SheetName
-                    log += vbCrLf & "Row number: " & row
-                    log += LogException(ex)
+                    LogThis(vbCrLf & "Error getting the source and destination file names from the Excel file")
+                    LogThis(vbCrLf & "Workbook name: " & options.ExcelFileName)
+                    LogThis(vbCrLf & "Sheet name: " & options.SheetName)
+                    LogThis(vbCrLf & "Row number: " & row)
+                    LogThis(GetExceptionMessage(ex))
                 End Try
-
-                Try
-                    log += vbCrLf & vbCrLf & "Opening file number " & count + 1 & ": " & source
-
-                    ' Get the linked files first, and change the Absolute paths to relative first.
-                    'list the linked files
-                    log += vbCrLf & "Getting linked files..."
-                    Dim linkCount As Integer = ListLinks(source, log)
-                    If linkCount Then
-                        log += vbCrLf & linkCount & " linked file(s) with Absolute paths found, changed to Relative."
-                    Else
-                        log += " No linked files found."
-                    End If
-
-                    Dim openedDoc As Document = OpenDetached(app, source)
-                    If openedDoc IsNot Nothing Then
-
-
-
-                        'Save the document in a new location
-                        Dim saveAsOptions As SaveAsOptions = New SaveAsOptions
-                        saveAsOptions.OverwriteExistingFile = False
-                        If openedDoc.IsWorkshared Then
-                            Dim wsOptions As WorksharingSaveAsOptions = New WorksharingSaveAsOptions
-                            wsOptions.SaveAsCentral = True
-                            saveAsOptions.SetWorksharingOptions(wsOptions)
-                            log += vbCrLf & "Source file is a Workshared document. "
-                        End If
-                        Try
-                            log += vbCrLf & "Saving to " & dest
-                            openedDoc.SaveAs(dest, saveAsOptions)
-                        Catch ex As Exception
-                            Throw New Exception("Error saving " & dest, ex)
-                        End Try
-                        openedDoc.Close(False)
-                    End If
-
-                    success += 1
-
-
-
-                Catch ex As Exception
-                    Throw New Exception("Error opening or saving the Revit file", ex)
-                End Try
-
-
-                count += 1
             Loop
-            log += vbCrLf & vbCrLf & success & " of " & count & " files saved to new locations."
+            wb.Close()
+
+            For Each rvtFile As RvtFile In files
+                count += 1
+                LogThis(vbCrLf & "Starting file number " & count & ": " & rvtFile.Source)
+
+                'Set Absolute Paths to Relative
+                'If options.IsSettingAbsoluteToRelative Then
+                '    LogThis("Getting linked files...")
+                '    Dim linkCount As Integer = ListLinks(rvtFile.Source)
+                '    'Set the options
+                '    If linkCount Then
+                '        LogThis(linkCount & " linked file(s) found, Absolute paths changed to Relative.")
+                '    Else
+                '        LogThis(" No linked files found.")
+                '    End If
+                'End If
+
+                'Open the file or backup
+                Dim openedDoc As Document
+
+                If options.IsSavingToNewLocation Then
+                    LogThis("Opening: " & rvtFile.Source)
+                    openedDoc = OpenDetached(app, rvtFile.Source)
+                Else
+                    If BackupFile(rvtFile) Then
+                        LogThis("Opening: " & rvtFile.BackupSource)
+                        openedDoc = OpenDetached(app, rvtFile.BackupSource)
+                    Else
+                        Continue For
+                    End If
+                End If
+
+                If openedDoc IsNot Nothing Then
+                    'Save the document in a new location
+                    Dim saveAsOptions As SaveAsOptions = New SaveAsOptions
+                    saveAsOptions.OverwriteExistingFile = False
+                    If openedDoc.IsWorkshared Then
+                        Dim wsOptions As WorksharingSaveAsOptions = New WorksharingSaveAsOptions
+                        wsOptions.SaveAsCentral = True
+                        saveAsOptions.SetWorksharingOptions(wsOptions)
+
+                        Try
+                            If options.IsSavingToNewLocation Then
+                                'Create the new destination folder, if it doesn't exist.
+                                Dim di As DirectoryInfo = New DirectoryInfo(New FileInfo(rvtFile.Destination).DirectoryName)
+                                If (Not di.Exists) Then
+                                    LogThis("Creating folder that doesn't exist: " & di.FullName)
+                                    di.Create()
+                                End If
+                                LogThis("Saving new central file to " & rvtFile.Destination)
+                                openedDoc.SaveAs(rvtFile.Destination, saveAsOptions)
+                            Else
+                                LogThis("Saving new central file to " & rvtFile.Source)
+                                openedDoc.SaveAs(rvtFile.Source, saveAsOptions)
+                            End If
+                            LogThis("Save successful. ")
+                            success += 1
+                        Catch ex As Exception
+                            LogException(New Exception("Error saving " & rvtFile.Destination, ex))
+                        End Try
+                    Else
+                        LogThis("Source file is NOT a Workshared document, skipping it. ")
+                    End If
+
+                    openedDoc.Close(False)
+
+                End If
+
+            Next
+
+            LogThis(vbCrLf & success & " of " & count & " files saved to new locations.")
+            MsgBox(success & " of " & count & " files saved to new locations." & vbCrLf & _
+                   "Opening the log file...")
+            System.Diagnostics.Process.Start("notepad.exe", Path.GetTempPath & "SaveAsNewCentral.log")
 
             Return Result.Succeeded
         Catch ex As Exception
-            log += vbCrLf & LogException(ex)
-            message = "Unable to complete all files.  See the log file in C:\Users\<UserName>\AppData\Local\Temp\SaveAsNewCentral.log."
+            LogException(ex)
+            message = "Unable to complete the task.  Opening the log file..."
+            System.Diagnostics.Process.Start("notepad.exe", Path.GetTempPath & "SaveAsNewCentral.log")
             Return Result.Failed
         Finally
-            If wb IsNot Nothing Then
-                wb.Close()
-            End If
-            Dim temp As String = Path.GetTempPath
-            Using outfile As New StreamWriter(temp & "SaveAsNewCentral.log")
-                outfile.Write(log)
-            End Using
+            LogThis("Complete.")
         End Try
 
     End Function
 
-    Private Function LogException(ex As Exception)
-        Dim log As String = ""
-        log += vbCrLf & "!! Exception !!"
-        log += vbCrLf & ex.Message
+    Private Shared Sub LogThis(message As String)
+        Dim temp As String = Path.GetTempPath
+        Using outfile As New StreamWriter(temp & "SaveAsNewCentral.log", True)
+            outfile.WriteLine(message)
+        End Using
+    End Sub
+
+    Private Shared Sub LogException(exception As Exception)
+        Dim log As String = "!! Exception !!"
+        log += GetExceptionMessage(exception)
+        LogThis(log)
+    End Sub
+
+    Private Shared Function GetExceptionMessage(ex As Exception) As String
+        Dim log As String = vbCrLf & ex.Message
         If ex.InnerException IsNot Nothing Then
-            LogException(ex.InnerException)
+            log += GetExceptionMessage(ex.InnerException)
         End If
         Return log
     End Function
@@ -175,102 +226,123 @@ Public Class Commands
                     Dim openedDoc As Document = application.OpenDocumentFile(sourcePath, options)
                     Return openedDoc
                 Catch ex As Exception
-                    Throw New Exception("Revit was not able to open the document", ex)
+                    LogException(New Exception("Revit was not able to open the document", ex))
                 End Try
 
             Else
-                Throw New Exception("File does not exist: " & sourceFile)
+                LogException(New Exception("File does not exist: " & sourceFile))
             End If
         Catch ex As Exception
-            Throw New Exception("Error opening " & sourceFile, ex)
+            LogException(New Exception("Error opening " & sourceFile, ex))
         End Try
 
         Return Nothing
 
     End Function
 
-    Private Function ListLinks(location As String, ByRef log As String) As Integer
-
-        log += vbCrLf & "Getting Model Path for " & location.ToString
+    Private Function BackupFile(rvtFile As RvtFile) As Boolean
+        ' Rename the file and delete the backup folder
         Try
-            Dim path As ModelPath = ModelPathUtils.ConvertUserVisiblePathToModelPath(location)
-            Dim linkedFiles As String = vbCrLf & vbCrLf & location
-            Dim count As Integer = 0
-            ' access transmission data in the given Revit file
-
-            log += vbCrLf & "Reading Transmission Data. "
-            Dim transData As TransmissionData = TransmissionData.ReadTransmissionData(Path)
-            Dim externalReferences As ICollection(Of ElementId)
-
-            If transData IsNot Nothing Then
-                ' collect all (immediate) external references in the model
-
-                externalReferences = transData.GetAllExternalFileReferenceIds()
-                count = externalReferences.Count
-                Dim abscount As Integer = 0
-
-                If count > 0 Then
-                    log += vbCrLf & "Linked files found.  Writing those with absolute file names to SaveAsNewCentral.LinkedFiles.csv"
-                    Dim isModified As Boolean = False
-                    For Each refId As ElementId In externalReferences
-                        Dim extRef As ExternalFileReference = transData.GetLastSavedReferenceData(refId)
-                        If extRef.IsValidObject Then
-                            If extRef.ExternalFileReferenceType = ExternalFileReferenceType.CADLink Or extRef.ExternalFileReferenceType = ExternalFileReferenceType.DWFMarkup Or extRef.ExternalFileReferenceType = ExternalFileReferenceType.RevitLink Then
-                                If extRef.PathType = PathType.Absolute Then
-                                    linkedFiles += vbTab & extRef.GetPath.ToString
-                                    log += vbCrLf & "Linked file: " & extRef.GetPath.ToString
-
-                                    'TODO: Change any UNC paths to their new location.
-
-                                    Dim toLoad As Boolean = False
-                                    If extRef.GetLinkedFileStatus = LinkedFileStatus.Loaded Then
-                                        toLoad = True
-                                    End If
-                                    transData.SetDesiredReferenceData(refId, extRef.GetAbsolutePath(), PathType.Relative, toLoad)
-                                    isModified = True
-                                    abscount += 1
-                                End If
-                            End If
-                        End If
-                    Next
-
-                    'TODO: Check to see the effect on central files.
-
-                    If isModified Then
-                        transData.IsTransmitted = True
-                        TransmissionData.WriteTransmissionData(path, transData)
-                        log += vbCrLf & "Absolute paths have been set to Relative"
-                    End If
-
-                    Dim temp As String = System.IO.Path.GetTempPath
-                    Using outfile As New StreamWriter(temp & "SaveAsNewCentral.LinkedFiles.csv", True)
-                        outfile.Write(linkedFiles)
-                    End Using
-                Else
-                    log += vbCrLf & "No external links found. "
-                End If
-            Else
-                log += vbCrLf & "No transmission data found. "
+            'Delete any files with the existing name.
+            If File.Exists(rvtFile.BackupSource) Then
+                LogThis("Deleting previous backup file: " & rvtFile.BackupSource)
+                File.Delete(rvtFile.BackupSource)
             End If
+            'rename the file
+            LogThis("Renaming: " & rvtFile.Source & vbCrLf & "      to: " & rvtFile.BackupSource)
+            File.Move(rvtFile.Source, rvtFile.BackupSource)
 
-            Return count
-
+            'delete the backup folder
+            If Directory.Exists(rvtFile.BackupSourceFolder) Then
+                LogThis("Deleting backup folder: " & rvtFile.BackupSourceFolder)
+                Directory.Delete(rvtFile.BackupSourceFolder, True)
+            End If
+            Return True
         Catch ex As Exception
-            log += vbCrLf & "!! Exception !!"
-            log += vbCrLf & ex.Message
-            If ex.InnerException IsNot Nothing Then
-                LogException(ex.InnerException)
-            End If
-            Return 0
-        Finally
-            log += vbCrLf & "End of LinkedFiles function. "
+            LogException(New Exception("Error backing up the original source file or deleting the backup folder for " & rvtFile.Source, ex))
+            LogThis("File NOT saved.")
+            Return False
         End Try
-
     End Function
 
+    'Private Function ListLinks(location As String) As Integer
 
+    '    'log += vbCrLf & "Getting Model Path for " & location.ToString
+    '    Try
+    '        Dim path As ModelPath = ModelPathUtils.ConvertUserVisiblePathToModelPath(location)
+    '        Dim linkedFiles As String = vbCrLf & vbCrLf & location
+    '        Dim count As Integer = 0
+    '        ' access transmission data in the given Revit file
 
+    '        'log += vbCrLf & "Reading Transmission Data. "
+    '        Dim transData As TransmissionData = TransmissionData.ReadTransmissionData(path)
+    '        Dim externalReferences As ICollection(Of ElementId)
 
+    '        If transData IsNot Nothing Then
+    '            ' collect all (immediate) external references in the model
+
+    '            externalReferences = transData.GetAllExternalFileReferenceIds()
+    '            count = externalReferences.Count
+    '            Dim abscount As Integer = 0
+
+    '            If count > 0 Then
+    '                'log += vbCrLf & "Linked files found.  Writing those with absolute file names to SaveAsNewCentral.LinkedFiles.csv"
+    '                Dim isModified As Boolean = False
+    '                For Each refId As ElementId In externalReferences
+    '                    Dim extRef As ExternalFileReference = transData.GetLastSavedReferenceData(refId)
+    '                    If extRef.IsValidObject Then
+    '                        If extRef.ExternalFileReferenceType = ExternalFileReferenceType.CADLink Or extRef.ExternalFileReferenceType = ExternalFileReferenceType.DWFMarkup Or extRef.ExternalFileReferenceType = ExternalFileReferenceType.RevitLink Then
+    '                            If extRef.PathType = PathType.Absolute Then
+    '                                linkedFiles += vbTab & extRef.GetPath.ToString
+    '                                'log += vbCrLf & "Linked file: " & extRef.GetPath.ToString
+
+    '                                'TODO: Change any UNC paths to their new location.
+
+    '                                Dim toLoad As Boolean = False
+    '                                If extRef.GetLinkedFileStatus = LinkedFileStatus.Loaded Then
+    '                                    toLoad = True
+    '                                End If
+    '                                transData.SetDesiredReferenceData(refId, extRef.GetAbsolutePath(), PathType.Relative, toLoad)
+    '                                isModified = True
+    '                                abscount += 1
+    '                            End If
+    '                        End If
+    '                    End If
+    '                Next
+
+    '                'TODO: Check to see the effect on central files.
+
+    '                If isModified Then
+    '                    transData.IsTransmitted = True
+    '                    TransmissionData.WriteTransmissionData(path, transData)
+    '                    'log += vbCrLf & "Absolute paths have been set to Relative"
+    '                End If
+
+    '                Dim temp As String = System.IO.Path.GetTempPath
+    '                Using outfile As New StreamWriter(temp & "SaveAsNewCentral.LinkedFiles.csv", True)
+    '                    outfile.Write(linkedFiles)
+    '                End Using
+    '            Else
+    '                'log += vbCrLf & "No external links found. "
+    '            End If
+    '        Else
+    '            'log += vbCrLf & "No transmission data found. "
+    '        End If
+
+    '        Return count
+
+    '    Catch ex As Exception
+    '        'log += vbCrLf & "!! Exception !!"
+    '        'log += vbCrLf & ex.Message
+    '        If ex.InnerException IsNot Nothing Then
+    '            GetExceptionMessage(ex.InnerException)
+    '        End If
+    '        Return 0
+    '    Finally
+    '        'log += vbCrLf & "End of LinkedFiles function. "
+    '    End Try
+
+    'End Function
 
 End Class
 
@@ -316,7 +388,6 @@ Public Class UI
                 'This model has been transmitted from some other location. What do you want to do?
                 e2.OverrideResult(1002)
                 'Work with this model temporarily
-
             Case "TaskDialog_Audit_Warning"
                 'Audit, This operation can take a long time...Do you want to continue?
                 e2.OverrideResult(CInt(TaskDialogResult.Yes))
@@ -346,3 +417,59 @@ End Class
 
 
 
+Public Class RvtFile
+
+    Public Sub New(source As String, destination As String, suffix As String)
+        Me.Source = source
+        Me.Destination = destination
+        Me.BackupSuffix = suffix
+    End Sub
+
+    Private _source As String
+    Public Property Source() As String
+        Get
+            Return _source
+        End Get
+        Set(ByVal value As String)
+            _source = value
+            If _source.ToLower.EndsWith(".rvt") Then
+                _backupSourceFolder = _source.Substring(0, _source.Length - 4) & "_backup"
+            Else
+                _backupSourceFolder = _source & "_backup"
+            End If
+        End Set
+    End Property
+
+    Private _destination As String
+    Public Property Destination() As String
+        Get
+            Return _destination
+        End Get
+        Set(ByVal value As String)
+            _destination = value
+        End Set
+    End Property
+
+    Private _backupSource As String
+    Public ReadOnly Property BackupSource() As String
+        Get
+            Return _backupSource
+        End Get
+    End Property
+
+    Private _backupSourceFolder As String
+    Public ReadOnly Property BackupSourceFolder() As String
+        Get
+            Return _backupSourceFolder
+        End Get
+    End Property
+
+    Private _suffix As String
+    Public WriteOnly Property BackupSuffix() As String
+        Set(ByVal value As String)
+            _suffix = value
+            _backupSource = _source.Substring(0, _source.Length - 4) & _suffix & ".rvt"
+        End Set
+    End Property
+
+End Class
