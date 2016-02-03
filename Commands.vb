@@ -143,6 +143,8 @@ Public Class Commands
                         wsOptions.SaveAsCentral = True
                         saveAsOptions.SetWorksharingOptions(wsOptions)
 
+
+
                         Try
                             If options.IsSavingToNewLocation Then
                                 'Create the new destination folder, if it doesn't exist.
@@ -157,7 +159,26 @@ Public Class Commands
                                 LogThis("Saving new central file to " & rvtFile.Source)
                                 openedDoc.SaveAs(rvtFile.Source, saveAsOptions)
                             End If
+
+
+
                             LogThis("Save successful. ")
+
+                            'Syncing with Central to relinquish worksets
+                            Dim twco = New TransactWithCentralOptions
+                            Dim swco = New SynchronizeWithCentralOptions
+                            Dim ro = New RelinquishOptions(True)
+                            ro.CheckedOutElements = True
+                            ro.UserWorksets = True
+                            ro.FamilyWorksets = True
+                            ro.StandardWorksets = True
+                            ro.ViewWorksets = True
+                            swco.SetRelinquishOptions(ro)
+
+                            openedDoc.SynchronizeWithCentral(twco, swco)
+                            LogThis("Sync With Central complete, relinquished all worksets.")
+
+
                             success += 1
                         Catch ex As Exception
                             LogException(New Exception("Error saving " & rvtFile.Destination, ex))
@@ -167,6 +188,7 @@ Public Class Commands
                     End If
 
                     openedDoc.Close(False)
+                    LogThis("Closed.")
 
                 End If
 
@@ -265,84 +287,84 @@ Public Class Commands
         End Try
     End Function
 
-    'Private Function ListLinks(location As String) As Integer
+    Private Function ListLinks(location As String) As Integer
 
-    '    'log += vbCrLf & "Getting Model Path for " & location.ToString
-    '    Try
-    '        Dim path As ModelPath = ModelPathUtils.ConvertUserVisiblePathToModelPath(location)
-    '        Dim linkedFiles As String = vbCrLf & vbCrLf & location
-    '        Dim count As Integer = 0
-    '        ' access transmission data in the given Revit file
+        'log += vbCrLf & "Getting Model Path for " & location.ToString
+        Try
+            Dim path As ModelPath = ModelPathUtils.ConvertUserVisiblePathToModelPath(location)
+            Dim linkedFiles As String = vbCrLf & vbCrLf & location
+            Dim count As Integer = 0
+            ' access transmission data in the given Revit file
 
-    '        'log += vbCrLf & "Reading Transmission Data. "
-    '        Dim transData As TransmissionData = TransmissionData.ReadTransmissionData(path)
-    '        Dim externalReferences As ICollection(Of ElementId)
+            'log += vbCrLf & "Reading Transmission Data. "
+            Dim transData As TransmissionData = TransmissionData.ReadTransmissionData(path)
+            Dim externalReferences As ICollection(Of ElementId)
 
-    '        If transData IsNot Nothing Then
-    '            ' collect all (immediate) external references in the model
+            If transData IsNot Nothing Then
+                ' collect all (immediate) external references in the model
 
-    '            externalReferences = transData.GetAllExternalFileReferenceIds()
-    '            count = externalReferences.Count
-    '            Dim abscount As Integer = 0
+                externalReferences = transData.GetAllExternalFileReferenceIds()
+                count = externalReferences.Count
+                Dim abscount As Integer = 0
 
-    '            If count > 0 Then
-    '                'log += vbCrLf & "Linked files found.  Writing those with absolute file names to SaveAsNewCentral.LinkedFiles.csv"
-    '                Dim isModified As Boolean = False
-    '                For Each refId As ElementId In externalReferences
-    '                    Dim extRef As ExternalFileReference = transData.GetLastSavedReferenceData(refId)
-    '                    If extRef.IsValidObject Then
-    '                        If extRef.ExternalFileReferenceType = ExternalFileReferenceType.CADLink Or extRef.ExternalFileReferenceType = ExternalFileReferenceType.DWFMarkup Or extRef.ExternalFileReferenceType = ExternalFileReferenceType.RevitLink Then
-    '                            If extRef.PathType = PathType.Absolute Then
-    '                                linkedFiles += vbTab & extRef.GetPath.ToString
-    '                                'log += vbCrLf & "Linked file: " & extRef.GetPath.ToString
+                If count > 0 Then
+                    'log += vbCrLf & "Linked files found.  Writing those with absolute file names to SaveAsNewCentral.LinkedFiles.csv"
+                    Dim isModified As Boolean = False
+                    For Each refId As ElementId In externalReferences
+                        Dim extRef As ExternalFileReference = transData.GetLastSavedReferenceData(refId)
+                        If extRef.IsValidObject Then
+                            If extRef.ExternalFileReferenceType = ExternalFileReferenceType.CADLink Or extRef.ExternalFileReferenceType = ExternalFileReferenceType.DWFMarkup Or extRef.ExternalFileReferenceType = ExternalFileReferenceType.RevitLink Then
+                                If extRef.PathType = PathType.Absolute Then
+                                    linkedFiles += vbTab & extRef.GetPath.ToString
+                                    'log += vbCrLf & "Linked file: " & extRef.GetPath.ToString
 
-    '                                'TODO: Change any UNC paths to their new location.
+                                    'TODO: Change any UNC paths to their new location.
 
-    '                                Dim toLoad As Boolean = False
-    '                                If extRef.GetLinkedFileStatus = LinkedFileStatus.Loaded Then
-    '                                    toLoad = True
-    '                                End If
-    '                                transData.SetDesiredReferenceData(refId, extRef.GetAbsolutePath(), PathType.Relative, toLoad)
-    '                                isModified = True
-    '                                abscount += 1
-    '                            End If
-    '                        End If
-    '                    End If
-    '                Next
+                                    Dim toLoad As Boolean = False
+                                    If extRef.GetLinkedFileStatus = LinkedFileStatus.Loaded Then
+                                        toLoad = True
+                                    End If
+                                    transData.SetDesiredReferenceData(refId, extRef.GetAbsolutePath(), PathType.Relative, toLoad)
+                                    isModified = True
+                                    abscount += 1
+                                End If
+                            End If
+                        End If
+                    Next
 
-    '                'TODO: Check to see the effect on central files.
+                    'TODO: Check to see the effect on central files.
 
-    '                If isModified Then
-    '                    transData.IsTransmitted = True
-    '                    TransmissionData.WriteTransmissionData(path, transData)
-    '                    'log += vbCrLf & "Absolute paths have been set to Relative"
-    '                End If
+                    If isModified Then
+                        transData.IsTransmitted = True
+                        TransmissionData.WriteTransmissionData(path, transData)
+                        'log += vbCrLf & "Absolute paths have been set to Relative"
+                    End If
 
-    '                Dim temp As String = System.IO.Path.GetTempPath
-    '                Using outfile As New StreamWriter(temp & "SaveAsNewCentral.LinkedFiles.csv", True)
-    '                    outfile.Write(linkedFiles)
-    '                End Using
-    '            Else
-    '                'log += vbCrLf & "No external links found. "
-    '            End If
-    '        Else
-    '            'log += vbCrLf & "No transmission data found. "
-    '        End If
+                    Dim temp As String = System.IO.Path.GetTempPath
+                    Using outfile As New StreamWriter(temp & "SaveAsNewCentral.LinkedFiles.csv", True)
+                        outfile.Write(linkedFiles)
+                    End Using
+                Else
+                    'log += vbCrLf & "No external links found. "
+                End If
+            Else
+                'log += vbCrLf & "No transmission data found. "
+            End If
 
-    '        Return count
+            Return count
 
-    '    Catch ex As Exception
-    '        'log += vbCrLf & "!! Exception !!"
-    '        'log += vbCrLf & ex.Message
-    '        If ex.InnerException IsNot Nothing Then
-    '            GetExceptionMessage(ex.InnerException)
-    '        End If
-    '        Return 0
-    '    Finally
-    '        'log += vbCrLf & "End of LinkedFiles function. "
-    '    End Try
+        Catch ex As Exception
+            'log += vbCrLf & "!! Exception !!"
+            'log += vbCrLf & ex.Message
+            If ex.InnerException IsNot Nothing Then
+                GetExceptionMessage(ex.InnerException)
+            End If
+            Return 0
+        Finally
+            'log += vbCrLf & "End of LinkedFiles function. "
+        End Try
 
-    'End Function
+    End Function
 
 End Class
 
