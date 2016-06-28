@@ -238,8 +238,10 @@ Public Class Commands
                 Dim sourcePath As ModelPath = ModelPathUtils.ConvertUserVisiblePathToModelPath(sourceFile)
                 Dim options As New OpenOptions()
                 Dim wsoptions As New WorksetConfiguration
+                Dim worksets As New List(Of WorksetId)
                 'Don't open any worksets, so it opens faster, and prevents editing.
-                wsoptions.CloseAll()
+                wsoptions.Open(worksets)
+                'wsoptions.CloseAll()
 
                 'Open and Detach from Central so that it doesn't modify the file in any way.
                 options.DetachFromCentralOption = DetachFromCentralOption.DetachAndPreserveWorksets
